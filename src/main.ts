@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.16";
+const PLUGIN_VERSION = "0.1.17";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -374,6 +374,7 @@ class SettingTab extends PluginSettingTab {
       .addText((text) => {
         const input = text.inputEl;
         input.type = "color";
+        input.addClass("shp-color-input");
         input.value = this.plugin.settings.highlightColor || "#ffe66d";
         input.addEventListener("input", async () => {
           this.plugin.settings.highlightColor = input.value;

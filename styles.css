@@ -1,11 +1,35 @@
-/* 搜索关键词高亮：对齐 Obsidian 主题变量，明暗主题下观感与原生一致。 */
+/* 搜索关键词高亮：对齐 Obsidian 主题变量，明暗主题下观感与原生一致。
+   用户自定义色由 main.ts 注入 <style id="search-highlight-plus-color"> 覆盖背景色。 */
 .search-term-hl {
   background-color: var(--text-highlight-bg, #ffe66d);
   color: var(--text-normal);
   border-radius: 2px;
 }
 
-/* 注意：把 Obsidian 原生搜索高亮置为透明的规则「不在此处」——
-   它原先写死在本文件会被 Obsidian 常驻加载、无法开关。现改为由插件设置项
-   「接管全部搜索高亮（只亮关键词）」动态注入 <style id="search-highlight-plus-native-mask">，
-   关闭开关即移除该 <style>，原生高亮恢复。见 main.ts 的 applyNativeMask()。 */
+/* 设置页「Highlight color」颜色输入框。
+   问题：Obsidian 默认 input 焦点/悬停阴影是向外扩的 box-shadow，
+   而设置项控制容器默认会裁掉上下溢出的部分（黄色圆圈外圈阴影被上下切）。
+   修复：① 给输入框上下留白(margin)，② 让含该输入框的控制容器 overflow:visible，
+   ③ 用可控的 outline 替代默认大阴影，避免被裁剪。 */
+.setting-item-control:has(.shp-color-input) {
+  overflow: visible;
+}
+
+.shp-color-input {
+  width: 46px;
+  height: 28px;
+  padding: 2px;
+  margin: 4px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.shp-color-input:hover,
+.shp-color-input:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
