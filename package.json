@@ -1,0 +1,16 @@
+{
+  "name": "obsidian-table-search-highlight",
+  "version": "0.1.0",
+  "description": "点击搜索结果片段后，让 Markdown 表格内的关键词也像正文一样高亮。",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "devDependencies": {
+    "obsidian": "latest",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.5.4"
+  }
+}

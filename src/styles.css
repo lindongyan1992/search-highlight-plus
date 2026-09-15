@@ -1,0 +1,11 @@
+/* 搜索关键词高亮：对齐 Obsidian 主题变量，明暗主题下观感与原生一致。 */
+.search-term-hl {
+  background-color: var(--text-highlight-bg, #ffe66d);
+  color: var(--text-normal);
+  border-radius: 2px;
+}
+
+/* 注意：把 Obsidian 原生搜索高亮置为透明的规则「不在此处」——
+   它原先写死在本文件会被 Obsidian 常驻加载、无法开关。现改为由插件设置项
+   「接管全部搜索高亮（只亮关键词）」动态注入 <style id="search-highlight-plus-native-mask">，
+   关闭开关即移除该 <style>，原生高亮恢复。见 main.ts 的 applyNativeMask()。 */
