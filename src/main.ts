@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.14";
+const PLUGIN_VERSION = "0.1.15";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -16,12 +16,16 @@ interface TableSearchHighlightSettings extends QueryOptions {
    *  原因：Live Preview 下全局搜索点开文件只做滚动/选中，不产生持久高亮标记；
    *  阅读视图会持久渲染搜索高亮，插件才能复用其关键词照亮表格。 */
   autoReadingMode: boolean;
+  /** 高亮背景色。空字符串 = 跟随 Obsidian 主题变量 (--text-highlight-bg)。
+   *  非空 = 用户自定义十六进制颜色，由 applyColorOverride() 注入 style 覆盖。 */
+  highlightColor: string;
 }
 
 const DEFAULT_SETTINGS: TableSearchHighlightSettings = {
   caseSensitive: false,
   regex: false,
   autoReadingMode: true,
+  highlightColor: "",
 };
 
 export default class SearchHighlightPlus extends Plugin {
@@ -35,6 +39,7 @@ export default class SearchHighlightPlus extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.applyColorOverride();
     this.addSettingTab(new SettingTab(this));
     this.addCommand({
       id: "highlight-manual",
@@ -275,6 +280,27 @@ export default class SearchHighlightPlus extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
   }
+
+  // 用户自定义高亮背景色：空值跟随主题变量，非空则注入 style 覆盖 .search-term-hl。
+  // 参考 Highlight Same Matches 的做法，用颜色输入框让用户自选高亮色。
+  private applyColorOverride(): void {
+    const id = "search-highlight-plus-color";
+    const el = document.getElementById(id) as HTMLStyleElement | null;
+    const color = this.settings.highlightColor?.trim();
+    if (!color) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      const created = document.createElement("style");
+      created.id = id;
+      document.head.appendChild(created);
+    }
+    const target = document.getElementById(id) as HTMLStyleElement | null;
+    if (target) {
+      target.textContent = `.search-term-hl { background-color: ${color} !important; }`;
+    }
+  }
 }
 
 function escapeRegExp(s: string): string {
@@ -326,5 +352,21 @@ class SettingTab extends PluginSettingTab {
           this.plugin.requestApply();
         })
       );
+
+    new Setting(containerEl)
+      .setName("Highlight color")
+      .setDesc(
+        "Background color of the keyword highlight. Leave empty to follow your theme's highlight color; pick a color to override it everywhere the plugin highlights."
+      )
+      .addText((text) => {
+        text.inputEl.type = "color";
+        text
+          .setValue(this.plugin.settings.highlightColor || "#ffe66d")
+          .onChange(async (value) => {
+            this.plugin.settings.highlightColor = value;
+            await this.plugin.saveSettings();
+            this.plugin.applyColorOverride();
+          });
+      });
   }
 }
