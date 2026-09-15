@@ -18,6 +18,23 @@ Highlight only the matched keywords inside complex Markdown blocks when you open
 
 When the matched text lives inside a richly rendered block, the default behavior highlights the entire table cell / blockquote / callout / code block / list item, not just the word. This plugin makes the persistent highlight keyword-precise for those blocks.
 
+## How it compares to other search-highlight plugins
+
+Search Highlight+ is deliberately narrow: it only changes **what gets highlighted** at the moment you open a note from a search result. It does *not* replace Obsidian's search, nor your in-note find (Ctrl+F).
+
+| Plugin | Approach | Modes | Keyword-precise highlight inside complex blocks on search-result open? |
+| --- | --- | --- | --- |
+| **Search Highlight+ (this)** | Refines Obsidian's default *whole-block* highlight into a *keyword-precise* one | Reading view (recommended) + Live Preview; desktop + mobile | ✅ Table cells, callouts, code blocks, list items (incl. `[[wikilinks]]`) |
+| Dynamic Highlights | Highlights by cursor selection or persistent regex rules | Source / Live Preview only — **no Reading mode** | ⚠️ Editor-only; not driven by search-result open |
+| Highlight Same Matches | Highlights every occurrence of selected text (Notepad++ style) | Live Preview / Reading | ⚠️ Skips rendered tables in Live Preview (needs Source mode) |
+| Find in Note | In-note Ctrl+F replacement; paints every match via CSS Custom Highlight API (no reflow) | Reading + Live Preview; desktop + mobile | ✅ But it is an in-note find, not the search-result-open flow |
+| Hotlines | Highlights whole *lines* matching keyword/regex rules | Reading + Live Preview; desktop + mobile | ⚠️ Highlights the full row, not the keyword |
+| SwiftMatch / SearchPlus | Vault-wide selection / filter search with counters & result fragments | Editor / result pane | ⚠️ Highlight lives in the result list, not the rendered note |
+
+**Where Search Highlight+ fits:** it is the plugin for the exact moment *"you clicked a global search result and the note opened."* In Reading view it turns Obsidian's default whole-cell / whole-block flash into a precise keyword highlight — including inside tables, callouts, code blocks, and list items that contain `[[wikilinks]]`. Because it reads the query from the search-view instance rather than desktop-only DOM selectors, the same behavior works on mobile.
+
+> Note: for the global-search flow the precise highlight lands in **Reading view** (the "Auto switch to Reading view" setting handles this automatically); the manual command and in-note `Ctrl+F` also work in Live Preview.
+
 ## Usage
 
 1. Install and enable the plugin.
