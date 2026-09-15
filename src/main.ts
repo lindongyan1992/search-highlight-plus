@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.12";
+const PLUGIN_VERSION = "0.1.13";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -129,6 +129,27 @@ export default class SearchHighlightPlus extends Plugin {
   };
 
   private readSearchInput(): string {
+    // 优先从搜索视图实例读取（桌面/移动通用，不依赖具体 DOM class）。
+    // 移动端全局搜索是独立搜索视图，其输入框 class 可能与桌面侧边栏不同，
+    // 故直接遍历 search 类型 leaf 的输入框，而非只查固定选择器。
+    const searchLeaves = this.app.workspace.getLeavesOfType("search");
+    for (const leaf of searchLeaves) {
+      const root = (leaf.view as unknown as { containerEl?: HTMLElement })?.containerEl;
+      if (!root) continue;
+      const exact = root.querySelector<HTMLInputElement>(
+        ".search-input-container input, input.search-input"
+      );
+      const exactVal = exact?.value?.trim();
+      if (exactVal) return exactVal;
+      // 宽松兜底：搜索视图内第一个有内容的文本输入框（覆盖移动端未知 class）
+      const inputs = root.querySelectorAll<HTMLInputElement>("input");
+      for (const inp of inputs) {
+        if (inp.type === "checkbox" || inp.type === "radio") continue;
+        const v = inp.value?.trim();
+        if (v) return v;
+      }
+    }
+    // fallback：直接查 DOM（兼容桌面侧边搜索 / 编辑器内搜索）
     const inp = document.querySelector<HTMLInputElement>(SEARCH_INPUT_SELECTOR);
     return inp?.value?.trim() ?? "";
   }
