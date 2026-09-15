@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.15";
+const PLUGIN_VERSION = "0.1.16";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -358,15 +358,28 @@ class SettingTab extends PluginSettingTab {
       .setDesc(
         "Background color of the keyword highlight. Leave empty to follow your theme's highlight color; pick a color to override it everywhere the plugin highlights."
       )
-      .addText((text) => {
-        text.inputEl.type = "color";
-        text
-          .setValue(this.plugin.settings.highlightColor || "#ffe66d")
-          .onChange(async (value) => {
-            this.plugin.settings.highlightColor = value;
+      .addButton((btn) =>
+        btn
+          .setButtonText(
+            this.plugin.settings.highlightColor ? "Reset to theme color" : "Using theme color"
+          )
+          .setDisabled(!this.plugin.settings.highlightColor)
+          .onClick(async () => {
+            this.plugin.settings.highlightColor = "";
             await this.plugin.saveSettings();
             this.plugin.applyColorOverride();
-          });
+            this.display();
+          })
+      )
+      .addText((text) => {
+        const input = text.inputEl;
+        input.type = "color";
+        input.value = this.plugin.settings.highlightColor || "#ffe66d";
+        input.addEventListener("input", async () => {
+          this.plugin.settings.highlightColor = input.value;
+          await this.plugin.saveSettings();
+          this.plugin.applyColorOverride();
+        });
       });
   }
 }
