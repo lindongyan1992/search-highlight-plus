@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.21";
+const PLUGIN_VERSION = "0.1.22";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -356,8 +356,9 @@ class SettingTab extends PluginSettingTab {
     let resetBtn: ButtonComponent | undefined;
     const refreshResetBtn = () => {
       if (!resetBtn) return;
+      // 跟随主题色（无自定义色）时禁用；选过颜色后才可点，点一下恢复主题色。
       const hasColor = !!this.plugin.settings.highlightColor;
-      resetBtn.setButtonText(hasColor ? "Reset to theme color" : "Using theme color");
+      resetBtn.setButtonText("Reset");
       resetBtn.setDisabled(!hasColor);
     };
 
