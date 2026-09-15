@@ -23,27 +23,37 @@
    默认变量：--swatch-height:22px; --swatch-width:22px; --swatch-radius:14px;
              --input-border-width-focus:2px
 
-   两个坑：
+   三个坑（按踩到的顺序）：
    ① 外圈（紫框=聚焦环、灰环=悬停环）与阴影画在内层 ::-webkit-color-swatch 上，
-      而不是 input 本体。只在 input 上写 box-shadow:none 完全无效。
+      而不是 input 本体。只在 input 上写 box-shadow:none 完全无效（v0.1.18 白改）。
    ② 自带选择器 input[type="color"]（特异性 0,1,1）高于普通类选择器（0,1,0），
-      所以 width/height/border 这类声明会被自带样式盖掉 —— 必须提高特异性。
+      所以 width/height/border 这类声明会被自带样式盖掉 —— 必须提高特异性 + !important。
+   ③ 自带 input 是「宽 = swatch-width + 4、高 = swatch-height」的**非正方形**
+      （默认 26×22），内层色块再套 --swatch-radius:14px 圆角 →
+      色块被渲染成**扁椭圆**。所以色块伪元素必须显式钉成正方形 + border-radius:50%。
 
-   修法：选择器写成 `.setting-item-control input[type="color"].shp-color-input`
-   （特异性 0,3,1 > 自带 0,1,1）再叠 !important，同时压 input 本体与色块伪元素；
-   把所有「向外扩」的环/阴影全部删除，焦点/悬停指示改用 input 自身的 inset 内描边
-   —— 内描边画在元素边界内，永远不受任何祖先/自身裁剪影响。
+   修法：
+   - 选择器写成 `.setting-item-control input[type="color"].shp-color-input`
+     （特异性 0,3,1 > 自带 0,1,1）再叠 !important；
+   - input 本体固定成正方形（28×28），只留 3px 内边距给色块；
+   - 色块伪元素 width/height:100% + aspect-ratio:1/1 + border-radius:50% → 正圆；
+   - 所有「向外扩」的环/阴影全部删除，焦点/悬停指示改用 input 自身的 inset 内描边
+     —— 内描边画在元素边界内，永远不受任何祖先/自身裁剪影响。
    ============================================================================ */
 
-/* 1) input 本体：尺寸按自带变量推算，保证 22px 色块四周都有余量 */
+/* 1) input 本体：固定正方形，圆形容器 */
 .setting-item-control input[type="color"].shp-color-input {
   -webkit-appearance: none !important;
   appearance: none !important;
   box-sizing: border-box !important;
-  width: calc(var(--swatch-width, 22px) + 8px) !important;
-  height: calc(var(--swatch-height, 22px) + 8px) !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
   padding: 0 !important;
-  margin: 2px 0 !important;
+  margin: 0 !important;
   border: none !important;
   border-radius: 50% !important;
   background-color: transparent !important;
@@ -53,19 +63,28 @@
   vertical-align: middle;
 }
 
-/* 2) 色块伪元素：去掉自带外扩阴影（var(--swatch-shadow) 是内描边，保留作细边） */
+/* 2) 色块外层：只留等距内边距，给焦点内环腾出可见的环形空间 */
 .setting-item-control input[type="color"].shp-color-input::-webkit-color-swatch-wrapper {
-  padding: 2px !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 3px !important;
   border: none !important;
   background: transparent !important;
+  box-sizing: border-box !important;
 }
 
+/* 3) 色块本体：强制正方形 + 正圆，保留自带的细内描边轮廓 */
 .setting-item-control input[type="color"].shp-color-input::-webkit-color-swatch {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1 !important;
   border: none !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
   box-shadow: var(--swatch-shadow) !important;
 }
 
-/* 3) 关键：干掉 hover / focus 态自带的外扩环（灰环 + 紫框），只留细内描边 */
+/* 4) 关键：干掉 hover / focus 态自带的外扩环（灰环 + 紫框），只留细内描边 */
 .setting-item-control input[type="color"].shp-color-input:hover::-webkit-color-swatch,
 .setting-item-control input[type="color"].shp-color-input:focus::-webkit-color-swatch,
 .setting-item-control input[type="color"].shp-color-input:focus-visible::-webkit-color-swatch,
@@ -73,7 +92,7 @@
   box-shadow: var(--swatch-shadow) !important;
 }
 
-/* 4) 交互提示：inset 内描边（画在边界内，绝不被裁），并压掉自带 outline/box-shadow */
+/* 5) 交互提示：inset 内描边（画在边界内，绝不被裁），并压掉自带 outline/box-shadow */
 .setting-item-control input[type="color"].shp-color-input:hover,
 .setting-item-control input[type="color"].shp-color-input:focus,
 .setting-item-control input[type="color"].shp-color-input:focus-visible,
