@@ -1,4 +1,4 @@
-import { Plugin, MarkdownView, PluginSettingTab, Setting } from "obsidian";
+import { Plugin, MarkdownView, PluginSettingTab, Setting, ButtonComponent } from "obsidian";
 import { QueryOptions } from "./query";
 import {
   clearHighlights,
@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.18";
+const PLUGIN_VERSION = "0.1.19";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -353,34 +353,42 @@ class SettingTab extends PluginSettingTab {
         })
       );
 
+    let resetBtn: ButtonComponent | undefined;
+    const refreshResetBtn = () => {
+      if (!resetBtn) return;
+      const hasColor = !!this.plugin.settings.highlightColor;
+      resetBtn.setButtonText(hasColor ? "Reset to theme color" : "Using theme color");
+      resetBtn.setDisabled(!hasColor);
+    };
+
     new Setting(containerEl)
       .setName("Highlight color")
       .setDesc(
         "Background color of the keyword highlight. Leave empty to follow your theme's highlight color; pick a color to override it everywhere the plugin highlights."
       )
-      .addButton((btn) =>
-        btn
-          .setButtonText(
-            this.plugin.settings.highlightColor ? "Reset to theme color" : "Using theme color"
-          )
-          .setDisabled(!this.plugin.settings.highlightColor)
-          .onClick(async () => {
-            this.plugin.settings.highlightColor = "";
-            await this.plugin.saveSettings();
-            this.plugin.applyColorOverride();
-            this.display();
-          })
-      )
+      .addButton((btn) => {
+        resetBtn = btn;
+        refreshResetBtn();
+        btn.onClick(async () => {
+          this.plugin.settings.highlightColor = "";
+          await this.plugin.saveSettings();
+          this.plugin.applyColorOverride();
+          refreshResetBtn();
+        });
+      })
       .addText((text) => {
         const input = text.inputEl;
         input.type = "color";
         input.addClass("shp-color-input");
         input.value = this.plugin.settings.highlightColor || "#ffe66d";
-        input.addEventListener("input", async () => {
+        const onPick = async () => {
           this.plugin.settings.highlightColor = input.value;
           await this.plugin.saveSettings();
           this.plugin.applyColorOverride();
-        });
+          refreshResetBtn();
+        };
+        input.addEventListener("input", onPick);
+        input.addEventListener("change", onPick);
       });
   }
 }
