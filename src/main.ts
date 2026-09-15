@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.17";
+const PLUGIN_VERSION = "0.1.18";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";

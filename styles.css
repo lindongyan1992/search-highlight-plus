@@ -7,10 +7,14 @@
 }
 
 /* 设置页「Highlight color」颜色输入框。
-   问题：Obsidian 默认 input 焦点/悬停阴影是向外扩的 box-shadow，
-   而设置项控制容器默认会裁掉上下溢出的部分（黄色圆圈外圈阴影被上下切）。
-   修复：① 给输入框上下留白(margin)，② 让含该输入框的控制容器 overflow:visible，
-   ③ 用可控的 outline 替代默认大阴影，避免被裁剪。 */
+   问题：Obsidian 默认 `.setting-item-control input:focus-visible` 等规则特异性
+   高于 `.shp-color-input` 类选择器，会强行加上向外扩的 box-shadow + 紫色 outline，
+   且被控制容器裁掉上下（外圈阴影被切、紫色圈是默认 :focus-visible）。
+   修复(关键点)：
+   ① 用 !important 强制压下 Obsidian 自带的 box-shadow / outline（否则被其更高
+      特异性规则盖掉，等于白写）；
+   ② 焦点/悬停指示改用 inset 内描边 —— 内阴影永远不受祖先 overflow 裁剪，
+      从根上解决「上下被切」，且键盘聚焦仍有清晰可见的强调色环。 */
 .setting-item-control:has(.shp-color-input) {
   overflow: visible;
 }
@@ -18,18 +22,32 @@
 .shp-color-input {
   width: 46px;
   height: 28px;
-  padding: 2px;
-  margin: 4px 0;
+  margin: 4px 2px;
+  padding: 0;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  background: var(--background-primary);
+  border-radius: 6px;
+  background: transparent;
   cursor: pointer;
   box-sizing: border-box;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
+/* 让色块填满输入框、去掉原生内描边，观感更干净 */
+.shp-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border: none;
+}
+.shp-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+/* 悬停/焦点：用 inset 内描边替代外扩阴影（永不被裁），并彻底清掉默认外圈 */
 .shp-color-input:hover,
-.shp-color-input:focus-visible {
-  outline: 2px solid var(--interactive-accent);
-  outline-offset: 2px;
-  box-shadow: none;
+.shp-color-input:focus,
+.shp-color-input:focus-visible,
+.shp-color-input:active {
+  box-shadow: inset 0 0 0 2px var(--interactive-accent) !important;
+  outline: none !important;
 }
