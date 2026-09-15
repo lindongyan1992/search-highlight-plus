@@ -6,48 +6,78 @@
   border-radius: 2px;
 }
 
-/* 设置页「Highlight color」颜色输入框。
-   问题：Obsidian 默认 `.setting-item-control input:focus-visible` 等规则特异性
-   高于 `.shp-color-input` 类选择器，会强行加上向外扩的 box-shadow + 紫色 outline，
-   且被控制容器裁掉上下（外圈阴影被切、紫色圈是默认 :focus-visible）。
-   修复(关键点)：
-   ① 用 !important 强制压下 Obsidian 自带的 box-shadow / outline（否则被其更高
-      特异性规则盖掉，等于白写）；
-   ② 焦点/悬停指示改用 inset 内描边 —— 内阴影永远不受祖先 overflow 裁剪，
-      从根上解决「上下被切」，且键盘聚焦仍有清晰可见的强调色环。 */
-.setting-item-control:has(.shp-color-input) {
-  overflow: visible;
-}
+/* ============================================================================
+   设置页「Highlight color」颜色输入框
+   ----------------------------------------------------------------------------
+   背景（实测自 Obsidian 自带 app.css）：
+     input[type="color"]                          → -webkit-appearance:none;
+                                                    height:var(--swatch-height);
+                                                    width:calc(var(--swatch-width)+4px);
+                                                    border:none; padding:0
+     input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px }
+     input[type="color"]::-webkit-color-swatch    → box-shadow: var(--swatch-shadow)
+     input[type="color"]::-webkit-color-swatch:hover
+                                                  → box-shadow: inset ..., 0 0 0 2px var(--background-modifier-border-hover)
+     input[type="color"]:focus::-webkit-color-swatch
+                                                  → box-shadow: var(--swatch-shadow), 0 0 0 2px var(--background-modifier-border-focus)
+   默认变量：--swatch-height:22px; --swatch-width:22px; --swatch-radius:14px;
+             --input-border-width-focus:2px
 
-.shp-color-input {
-  width: 46px;
-  height: 28px;
-  margin: 4px 2px;
-  padding: 0;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-  box-sizing: border-box;
+   两个坑：
+   ① 外圈（紫框=聚焦环、灰环=悬停环）与阴影画在内层 ::-webkit-color-swatch 上，
+      而不是 input 本体。只在 input 上写 box-shadow:none 完全无效。
+   ② 自带选择器 input[type="color"]（特异性 0,1,1）高于普通类选择器（0,1,0），
+      所以 width/height/border 这类声明会被自带样式盖掉 —— 必须提高特异性。
+
+   修法：选择器写成 `.setting-item-control input[type="color"].shp-color-input`
+   （特异性 0,3,1 > 自带 0,1,1）再叠 !important，同时压 input 本体与色块伪元素；
+   把所有「向外扩」的环/阴影全部删除，焦点/悬停指示改用 input 自身的 inset 内描边
+   —— 内描边画在元素边界内，永远不受任何祖先/自身裁剪影响。
+   ============================================================================ */
+
+/* 1) input 本体：尺寸按自带变量推算，保证 22px 色块四周都有余量 */
+.setting-item-control input[type="color"].shp-color-input {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  box-sizing: border-box !important;
+  width: calc(var(--swatch-width, 22px) + 8px) !important;
+  height: calc(var(--swatch-height, 22px) + 8px) !important;
+  padding: 0 !important;
+  margin: 2px 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background-color: transparent !important;
   box-shadow: none !important;
   outline: none !important;
+  cursor: pointer;
+  vertical-align: middle;
 }
 
-/* 让色块填满输入框、去掉原生内描边，观感更干净 */
-.shp-color-input::-webkit-color-swatch-wrapper {
-  padding: 0;
-  border: none;
-}
-.shp-color-input::-webkit-color-swatch {
-  border: none;
-  border-radius: 5px;
+/* 2) 色块伪元素：去掉自带外扩阴影（var(--swatch-shadow) 是内描边，保留作细边） */
+.setting-item-control input[type="color"].shp-color-input::-webkit-color-swatch-wrapper {
+  padding: 2px !important;
+  border: none !important;
+  background: transparent !important;
 }
 
-/* 悬停/焦点：用 inset 内描边替代外扩阴影（永不被裁），并彻底清掉默认外圈 */
-.shp-color-input:hover,
-.shp-color-input:focus,
-.shp-color-input:focus-visible,
-.shp-color-input:active {
+.setting-item-control input[type="color"].shp-color-input::-webkit-color-swatch {
+  border: none !important;
+  box-shadow: var(--swatch-shadow) !important;
+}
+
+/* 3) 关键：干掉 hover / focus 态自带的外扩环（灰环 + 紫框），只留细内描边 */
+.setting-item-control input[type="color"].shp-color-input:hover::-webkit-color-swatch,
+.setting-item-control input[type="color"].shp-color-input:focus::-webkit-color-swatch,
+.setting-item-control input[type="color"].shp-color-input:focus-visible::-webkit-color-swatch,
+.setting-item-control input[type="color"].shp-color-input:active::-webkit-color-swatch {
+  box-shadow: var(--swatch-shadow) !important;
+}
+
+/* 4) 交互提示：inset 内描边（画在边界内，绝不被裁），并压掉自带 outline/box-shadow */
+.setting-item-control input[type="color"].shp-color-input:hover,
+.setting-item-control input[type="color"].shp-color-input:focus,
+.setting-item-control input[type="color"].shp-color-input:focus-visible,
+.setting-item-control input[type="color"].shp-color-input:active {
   box-shadow: inset 0 0 0 2px var(--interactive-accent) !important;
   outline: none !important;
 }
