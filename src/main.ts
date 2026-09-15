@@ -6,7 +6,7 @@ import {
   MARK_CLASS,
 } from "./highlighter";
 
-const PLUGIN_VERSION = "0.1.13";
+const PLUGIN_VERSION = "0.1.14";
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -38,7 +38,7 @@ export default class SearchHighlightPlus extends Plugin {
     this.addSettingTab(new SettingTab(this));
     this.addCommand({
       id: "highlight-manual",
-      name: "高亮当前笔记关键词（手动输入）",
+      name: "Highlight keywords in current note (manual input)",
       callback: () => this.manualHighlight(),
     });
 
@@ -166,7 +166,7 @@ export default class SearchHighlightPlus extends Plugin {
         state: { ...(state.state as Record<string, unknown> | undefined), mode: "preview" },
       });
     } catch (err) {
-      console.warn("[SearchHighlight+] 切换到阅读模式失败", err);
+      console.warn("[SearchHighlight+] Failed to switch to reading mode", err);
     }
   }
 
@@ -194,7 +194,7 @@ export default class SearchHighlightPlus extends Plugin {
   }
 
   private manualHighlight(): void {
-    const word = window.prompt("输入要高亮的关键词（空格分隔多个词）：", this.query);
+    const word = window.prompt("Enter keywords to highlight (space-separated):", this.query);
     if (word === null) return;
     this.query = word.trim();
     this.scheduleApply();
@@ -290,12 +290,12 @@ class SettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Search Highlight+ 设置" });
+    containerEl.createEl("h2", { text: "Search Highlight+ Settings" });
 
     new Setting(containerEl)
-      .setName("点击搜索结果自动阅读模式")
+      .setName("Auto reading mode on search result click")
       .setDesc(
-        "开启后，点击全局搜索结果会把笔记切到阅读（预览）模式——这是让复杂格式（表格/引用块/列表项等）内关键词高亮稳定生效的关键（Live Preview 下全局搜索不产生持久高亮标记）。如你更想保留编辑模式，可关闭，但复杂格式高亮仅在阅读模式下生效。"
+        "When on, clicking a global search result switches the note to Reading (preview) mode — required for keyword highlights to render reliably inside complex blocks (tables, callouts, lists). In Live Preview, global search produces no persistent highlight marks. Turn off to keep edit mode, but complex-block highlights then only work in Reading mode."
       )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.autoReadingMode).onChange(async (value) => {
@@ -306,8 +306,8 @@ class SettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("区分大小写")
-      .setDesc("默认不区分；开启后表格高亮按大小写严格匹配（跟随原生搜索高亮时一般无需开启）。")
+      .setName("Case sensitive")
+      .setDesc("Off by default. When on, highlights match case strictly.")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.caseSensitive).onChange(async (value) => {
           this.plugin.settings.caseSensitive = value;
@@ -317,8 +317,8 @@ class SettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("正则模式（手动命令）")
-      .setDesc("仅手动命令生效：将整条输入作为一条正则表达式匹配。跟随原生搜索高亮时此开关无效。")
+      .setName("Regex mode (manual command)")
+      .setDesc("Only affects the manual command: treats the entire input as a single regular expression. Has no effect when following native search highlighting.")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.regex).onChange(async (value) => {
           this.plugin.settings.regex = value;

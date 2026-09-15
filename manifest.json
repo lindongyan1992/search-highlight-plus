@@ -1,9 +1,9 @@
 {
   "id": "search-highlight-plus",
   "name": "Search Highlight+",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "minAppVersion": "1.4.0",
-  "description": "Highlights only the matched keywords within complex blocks (tables, blockquotes, callouts, code blocks, and list items including those with wikilinks) when opening a note from search results, instead of highlighting the whole block. Covers both global and in-note search; the native brief block flash is kept.",
+  "description": "Highlights only the matched keyword — not the whole block — inside tables, callouts, code blocks and list items when you open a note from search results.",
   "author": "lindongyan",
   "isDesktopOnly": false
 }
