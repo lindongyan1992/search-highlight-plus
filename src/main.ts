@@ -8,8 +8,6 @@ import {
 } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
-const PLUGIN_VERSION = "0.1.36";
-
 /** 高亮色为不透明纯色。预设色卡本身已都是浅色，正文里直接画满色块即可，无需再叠透明度。 */
 
 /** 预设高亮色卡。
@@ -292,7 +290,6 @@ export default class SearchHighlightPlus extends Plugin {
     );
 
     // 阅读模式：容器是静态 HTML，沿用 DOM 注入（编辑模式已由 CM decoration 处理，跳过）。
-    let totalMarks = 0;
     for (const leaf of leaves) {
       const v = leaf.view;
       if (!(v instanceof MarkdownView)) continue;
@@ -300,7 +297,6 @@ export default class SearchHighlightPlus extends Plugin {
       const c = this.getContainer(v);
       if (!c) continue;
       highlightAll(c, regexes);
-      totalMarks += c.findAll(`mark.${MARK_CLASS}`).length;
       if (v === activeView) this.observe(c);
     }
   }
@@ -530,7 +526,7 @@ class SettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    new Setting(containerEl).setName("Highlight options").setHeading();
+    new Setting(containerEl).setName("Keyword highlighting").setHeading();
 
     new Setting(containerEl)
       .setName("Auto reading mode on search result click")
