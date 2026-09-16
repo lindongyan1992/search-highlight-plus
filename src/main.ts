@@ -8,7 +8,7 @@ import {
 } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
-const PLUGIN_VERSION = "0.1.34";
+const PLUGIN_VERSION = "0.1.35";
 
 /** 高亮色为不透明纯色。预设色卡本身已都是浅色，正文里直接画满色块即可，无需再叠透明度。 */
 
@@ -208,7 +208,7 @@ export default class SearchHighlightPlus extends Plugin {
       if (mode === "preview") return;
       await view.leaf.setViewState({
         type: "markdown",
-        state: { ...((state.state ?? {}) as Record<string, unknown>), mode: "preview" },
+        state: { ...(state.state ?? {}), mode: "preview" },
       });
     } catch (err) {
       console.warn("[SearchHighlight+] Failed to switch to reading mode", err);
@@ -471,8 +471,7 @@ class KeywordPromptModal extends Modal {
     const input = contentEl.createEl("input", { type: "text" });
     input.value = this.plugin.getQuery();
     input.placeholder = "space-separated keywords";
-    input.style.marginTop = "8px";
-    input.style.width = "100%";
+    input.setCssStyles({ marginTop: "8px", width: "100%" });
     const submit = () => {
       const v = input.value.trim();
       this.close();
@@ -485,7 +484,7 @@ class KeywordPromptModal extends Modal {
       }
     });
     const btnRow = contentEl.createDiv({ cls: "modal-button-row" });
-    btnRow.style.marginTop = "12px";
+    btnRow.setCssStyles({ marginTop: "12px" });
     const ok = btnRow.createEl("button", { text: "Highlight", cls: "mod-cta" });
     ok.addEventListener("click", submit);
     const cancel = btnRow.createEl("button", { text: "Cancel" });
@@ -531,7 +530,7 @@ class SettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    new Setting(containerEl).setName("Search Highlight+ Settings").setHeading();
+    new Setting(containerEl).setName("Highlight options").setHeading();
 
     new Setting(containerEl)
       .setName("Auto reading mode on search result click")
