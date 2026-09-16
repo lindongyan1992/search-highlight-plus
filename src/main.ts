@@ -8,7 +8,7 @@ import {
 } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
-const PLUGIN_VERSION = "0.1.35";
+const PLUGIN_VERSION = "0.1.36";
 
 /** 高亮色为不透明纯色。预设色卡本身已都是浅色，正文里直接画满色块即可，无需再叠透明度。 */
 
