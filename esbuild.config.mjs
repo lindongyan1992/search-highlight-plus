@@ -15,7 +15,16 @@ esbuild
     banner: { js: banner },
     entryPoints: ["src/main.ts"],
     bundle: true,
-    external: ["obsidian", "electron", ...builtins],
+    // Obsidian 运行时已内置 CodeMirror 6，@codemirror/* 必须 external：
+    // 既避免 main.js 臃肿（否则 +400kb），又保证与 Obsidian 共用同一份 CM 实例，
+    // 注册的编辑器扩展才能被 Obsidian 内部的 CM 正确识别（版本不一致会导致扩展失效）。
+    external: [
+      "obsidian",
+      "electron",
+      "@codemirror/state",
+      "@codemirror/view",
+      ...builtins,
+    ],
     format: "cjs",
     target: "es2018",
     logLevel: "info",
