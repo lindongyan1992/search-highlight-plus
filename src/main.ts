@@ -8,7 +8,12 @@ import {
 } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
-const PLUGIN_VERSION = "0.1.24";
+const PLUGIN_VERSION = "0.1.28";
+
+// 诊断开关：控制是否自动点击原生查找条的「Find all / 查找全部」（v0.1.24 起加入）。
+// 设为 false = 只打开查找条并填词、不点按钮，用于排查「点击搜索结果时笔记跳变」是否由该点击引起。
+// 排查完成后可改回 true。
+const CLICK_FIND_ALL: boolean = false;
 
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
@@ -301,7 +306,8 @@ export default class SearchHighlightPlus extends Plugin {
   }
 
   // 「笔记内搜索」（关闭「自动切阅读模式」时）：驱动 Obsidian 原生查找条——
-  // 打开查找条、填入查询词、点「Find all / 查找全部」，由原生高亮全部匹配。
+  // 打开查找条并填入查询词（不自动点「Find all」、不自动滚动，避免视口跳变）。
+  // 用户可自行在查找条内按回车/点上一条下一条定位；表格内的匹配通常需再点一次搜索结果片段才能定位。
   private runNativeFind(attempt = 0): void {
     const q = this.getQuery();
     this.apply(); // OFF 下 apply 只做清理（清残留的插件高亮），不会注入插件高亮
@@ -340,7 +346,7 @@ export default class SearchHighlightPlus extends Plugin {
     return false;
   }
 
-  // 等原生查找条渲染后填入查询词（不直接回车/跳转，交给后面的 Find all）。
+  // 等原生查找条渲染后填入查询词（不自动定位/不自动点按，避免视口跳变）。
   private fillFindBar(q: string, attempt: number): void {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     const root: ParentNode = view?.containerEl ?? document;
@@ -356,8 +362,8 @@ export default class SearchHighlightPlus extends Plugin {
       input.value = q;
       input.dispatchEvent(new Event("input", { bubbles: true }));
     }
-    // 等查询注册（部分版本输入有防抖）后点「Find all」。
-    window.setTimeout(() => this.clickFindAll(), 220);
+    // 等查询注册（部分版本输入有防抖）后点「Find all」（诊断期由 CLICK_FIND_ALL 控制）。
+    if (CLICK_FIND_ALL) window.setTimeout(() => this.clickFindAll(), 220);
   }
 
   // 点原生查找条里的「Find all / 查找全部」按钮——按图标 lucide-text-select 定位（跨语言稳定）。
@@ -403,8 +409,16 @@ export default class SearchHighlightPlus extends Plugin {
     await this.saveData(this.settings);
   }
 
-  // 用户自定义高亮背景色：空值跟随主题变量，非空则注入 style 覆盖 .search-term-hl。
+  // 用户自定义高亮背景色：空值跟随主题变量，非空则注入 style 覆盖。
   // 参考 Highlight Same Matches 的做法，用颜色输入框让用户自选高亮色。
+  //
+  // 需要覆盖三处（否则「关掉自动切阅读模式」后改色无效）：
+  //  ① 插件自身标记 .search-term-hl —— 开关「开」时（预览 DOM / 编辑 CM 装饰）。
+  //  ② OFF 模式下的原生「笔记内查找」高亮：编辑模式（CodeMirror）的
+  //     span.obsidian-search-match-highlight —— 自带样式是 box-shadow 外环（--text-accent），
+  //     不读 background-color，故必须显式改背景 + 干掉外环。
+  //  ③ OFF 模式下原生高亮的阅读模式实现：.markdown-rendered .search-highlight > div
+  //     是绝对定位覆盖层，同样靠 box-shadow 画环，需改为背景填充。
   applyColorOverride(): void {
     const id = "search-highlight-plus-color";
     const el = document.getElementById(id) as HTMLStyleElement | null;
@@ -420,7 +434,14 @@ export default class SearchHighlightPlus extends Plugin {
     }
     const target = document.getElementById(id) as HTMLStyleElement | null;
     if (target) {
-      target.textContent = `.search-term-hl { background-color: ${color} !important; }`;
+      target.textContent = [
+        // ① 插件自身高亮（开关「开」时）
+        `.search-term-hl { background-color: ${color} !important; }`,
+        // ② 原生「笔记内查找」——编辑模式（CodeMirror）匹配高亮
+        `.cm-s-obsidian span.obsidian-search-match-highlight { background-color: ${color} !important; box-shadow: none !important; border-radius: 2px; }`,
+        // ③ 原生「笔记内查找」——阅读模式（绝对定位覆盖层）
+        `.markdown-rendered .search-highlight > div { background-color: ${color} !important; box-shadow: none !important; opacity: 1 !important; }`,
+      ].join("\n");
     }
   }
 }
@@ -443,7 +464,7 @@ class SettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Auto reading mode on search result click")
       .setDesc(
-        "When on, clicking a global search result switches the note to Reading (preview) mode and the plugin highlights the keywords itself. When off, the note stays in its current mode and the plugin instead runs the native in-note find: it opens the find bar with your query and triggers \"Find all\", letting Obsidian highlight every match."
+        "When on, clicking a global search result switches the note to Reading (preview) mode and the plugin highlights the keywords itself. When off, the note stays in its current mode and the plugin opens the native in-note find bar pre-filled with your query. Note: to locate a matched keyword inside a table, you may need to click the global search result snippet twice."
       )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.autoReadingMode).onChange(async (value) => {
@@ -487,7 +508,7 @@ class SettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Highlight color")
       .setDesc(
-        "Background color of the keyword highlight. Leave empty to follow your theme's highlight color; pick a color to override it everywhere the plugin highlights."
+        "Background color of the keyword highlight. Leave empty to follow your theme's highlight color; pick a color to override it everywhere keywords are highlighted, including the native in-note find bar."
       )
       .addButton((btn) => {
         resetBtn = btn;
