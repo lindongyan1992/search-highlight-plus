@@ -48,7 +48,7 @@ Manual command: **`Search Highlight+: Highlight current note keywords`** lets yo
 - **Auto switch to Reading view** — automatically open the note in Reading view when clicking a global search result (recommended; Live Preview global search produces no persistent highlight markers).
 - **Case sensitive** — match exact letter case.
 - **Regex mode** — applies only to the manual command; the whole input is treated as a regular expression.
-- **Highlight color** — background color of the keyword highlight. Leave empty to follow your theme's highlight color; pick a color to override it everywhere the plugin highlights.
+- **Highlight color** — background color of the keyword highlight. The default is a light yellow (`#FFD84D`), drawn as a solid color everywhere the plugin highlights, including the native in-note find bar. Pick a color from the preset swatches, or use the picker: on desktop a system color picker, on mobile an RGB text field (e.g. `255, 216, 77`). Press **Reset** to go back to the default.
 
 ## Compatibility
 
@@ -110,7 +110,7 @@ Search Highlight+ 的定位刻意做窄：它只改变**你从搜索结果打开
 - **点击搜索结果自动切换阅读视图** — 点击全局搜索结果时自动用阅读视图打开笔记（推荐；实时预览下的全局搜索不会产生持久高亮标记）。
 - **区分大小写** — 严格按字母大小写匹配。
 - **正则模式** — 仅对手动命令生效；整条输入作为正则表达式处理。
-- **高亮颜色** — 关键词高亮的背景色。留空则跟随主题的高亮色；自选颜色后会覆盖插件所有高亮处的背景色。
+- **高亮颜色** — 关键词高亮的背景色。默认是一支浅黄（`#FFD84D`），以不透明纯色绘制，覆盖插件所有高亮处，**包括原生「笔记内查找」高亮**。可从预设色卡中选色，也可用取色控件自选：**桌面端**为系统取色器，**手机端**为 RGB 输入框（如 `255, 216, 77`）。点 **Reset** 回到默认。
 
 ## 兼容性
 

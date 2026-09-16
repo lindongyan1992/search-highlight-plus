@@ -100,3 +100,100 @@
   box-shadow: inset 0 0 0 2px var(--interactive-accent) !important;
   outline: none !important;
 }
+
+/* ============================================================================
+   设置页「Highlight color」预设色卡
+   ----------------------------------------------------------------------------
+   背景：系统取色器（<input type="color">）弹出的调色盘由 OS/WebView 决定
+   （手机上偏深、还含黑白），插件无法定制其备选色 —— 只能自绘一排自己可控的浅色。
+   色卡与正文高亮同为不透明纯色（只作「这是哪一支色」的标识，所见即所得），
+   几何/阴影仍按坑 16 的教训加 !important，防被 Obsidian 的 button 默认规则盖掉。
+   ============================================================================ */
+
+/* 让色卡另起一行占满宽度：.setting-item 默认 flex（不换行），加 wrap 后 100% 子项才会换行 */
+.setting-item.shp-color-item {
+  flex-wrap: wrap !important;
+}
+
+.shp-color-swatches {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.shp-swatch {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  max-width: 26px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  cursor: pointer;
+  /* 细内描边给浅色色块一个轮廓，否则浅色铺在白底上几乎看不见边界 */
+  box-shadow: inset 0 0 0 1px var(--background-modifier-border) !important;
+}
+
+.shp-swatch:hover {
+  box-shadow: inset 0 0 0 2px var(--background-modifier-border-hover) !important;
+}
+
+/* 当前生效的色卡：inset 强调色环（画在边界内，永不被祖先裁剪） */
+.shp-swatch.is-active {
+  box-shadow: inset 0 0 0 2px var(--interactive-accent) !important;
+}
+
+/* 手机端：设置项常被排成纵向，确保色卡行与控件行分层不挤压；色卡放大到 30px 便于点按 */
+body.is-mobile .setting-item.shp-color-item {
+  flex-wrap: wrap !important;
+  row-gap: 6px;
+}
+
+body.is-mobile .setting-item.shp-color-item .setting-item-control {
+  flex-wrap: wrap !important;
+  justify-content: flex-start;
+}
+
+body.is-mobile .shp-color-swatches {
+  flex: 1 0 100%;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+body.is-mobile .shp-swatch {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+}
+
+/* ============================================================================
+   移动端「RGB 输入框」（取代系统取色器）
+   ----------------------------------------------------------------------------
+   手机上系统取色器的调色盘偏深、含黑白且难精细调节，改为手输「R, G, B」。
+   只在 body.is-mobile 下存在（桌面走 .shp-color-input），故这里只需定尺寸/排版；
+   数字用等宽字体 + tabular-nums，输入时不会因字符宽度变化而抖动。
+   ============================================================================ */
+
+.setting-item-control input.shp-rgb-input {
+  width: 132px !important;
+  min-width: 132px !important;
+  text-align: center;
+  font-family: var(--font-monospace);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+body.is-mobile .setting-item-control input.shp-rgb-input {
+  width: 150px !important;
+  min-width: 150px !important;
+  height: 36px !important;
+  margin-inline-start: auto;
+}
+
