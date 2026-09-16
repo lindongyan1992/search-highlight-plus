@@ -1,4 +1,4 @@
-import { Plugin, MarkdownView, PluginSettingTab, Setting, ButtonComponent, Platform } from "obsidian";
+import { Plugin, MarkdownView, PluginSettingTab, Setting, ButtonComponent, Platform, Modal } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import { QueryOptions } from "./query";
 import {
@@ -8,7 +8,7 @@ import {
 } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
-const PLUGIN_VERSION = "0.1.33";
+const PLUGIN_VERSION = "0.1.34";
 
 /** 高亮色为不透明纯色。预设色卡本身已都是浅色，正文里直接画满色块即可，无需再叠透明度。 */
 
@@ -50,7 +50,7 @@ interface TableSearchHighlightSettings extends QueryOptions {
    *  阅读视图会持久渲染搜索高亮，插件才能复用其关键词照亮表格。 */
   autoReadingMode: boolean;
   /** 高亮背景色。空字符串 = 跟随 Obsidian 主题变量 (--text-highlight-bg)。
-   *  非空 = 用户自定义十六进制颜色，由 applyColorOverride() 注入 style 覆盖。 */
+   *  非空 = 用户自定义十六进制颜色，由 applyColorOverride() 通过 CSS 变量注入。 */
   highlightColor: string;
 }
 
@@ -101,7 +101,6 @@ export default class SearchHighlightPlus extends Plugin {
       this.recoverState();
     });
     this.setupBodyWatcher();
-    console.log(`[SearchHighlight+] loaded v${PLUGIN_VERSION}`);
   }
 
   onunload(): void {
@@ -110,7 +109,6 @@ export default class SearchHighlightPlus extends Plugin {
     this.stopObserver();
     this.stopBodyWatcher();
     clearHighlights(document);
-    console.log(`[SearchHighlight+] unloaded`);
   }
 
   // 加载后自动恢复：若全局搜索框里有查询词，直接复用并高亮当前笔记，
@@ -141,7 +139,7 @@ export default class SearchHighlightPlus extends Plugin {
       return;
     }
     if (this.settings.autoReadingMode) {
-      this.ensureReadingMode(view).then(() => this.scheduleApply());
+      this.ensureReadingMode(view).then(() => this.scheduleApply()).catch(() => {});
     } else {
       this.runNativeFind();
     }
@@ -169,7 +167,7 @@ export default class SearchHighlightPlus extends Plugin {
 
   private onDocumentInput = (e: Event): void => {
     const el = e.target as HTMLElement | null;
-    if (!el || !(el instanceof HTMLInputElement)) return;
+    if (!el || !el.instanceOf(HTMLInputElement)) return;
     if (!el.matches(SEARCH_INPUT_SELECTOR)) return;
     this.query = el.value.trim();
     this.requestApply();
@@ -210,7 +208,7 @@ export default class SearchHighlightPlus extends Plugin {
       if (mode === "preview") return;
       await view.leaf.setViewState({
         type: "markdown",
-        state: { ...(state.state as Record<string, unknown> | undefined), mode: "preview" },
+        state: { ...((state.state ?? {}) as Record<string, unknown>), mode: "preview" },
       });
     } catch (err) {
       console.warn("[SearchHighlight+] Failed to switch to reading mode", err);
@@ -241,10 +239,11 @@ export default class SearchHighlightPlus extends Plugin {
   }
 
   private manualHighlight(): void {
-    const word = window.prompt("Enter keywords to highlight (space-separated):", this.query);
-    if (word === null) return;
-    this.query = word.trim();
-    this.scheduleApply();
+    const modal = new KeywordPromptModal(this, (word) => {
+      this.query = word.trim();
+      this.scheduleApply();
+    });
+    modal.open();
   }
 
   // 单次防抖应用（用于输入/布局变更等即时事件）
@@ -304,14 +303,10 @@ export default class SearchHighlightPlus extends Plugin {
       totalMarks += c.findAll(`mark.${MARK_CLASS}`).length;
       if (v === activeView) this.observe(c);
     }
-
-    console.log(
-      `[SearchHighlight+] terms=${Array.from(terms).join("|")} domMarks=${totalMarks}`
-    );
   }
 
   // 当前生效的查询：优先用输入事件缓存的词，否则实时读搜索框。
-  private getQuery(): string {
+  getQuery(): string {
     return this.query || this.readSearchInput();
   }
 
@@ -414,7 +409,7 @@ export default class SearchHighlightPlus extends Plugin {
 
   // 仅返回阅读模式的预览容器；编辑模式由 CM decoration 处理，不走 DOM 注入。
   private getContainer(view: MarkdownView): HTMLElement | null {
-    return view.contentEl.querySelector(".markdown-preview-sizer") as HTMLElement | null;
+    return view.contentEl.querySelector(".markdown-preview-sizer");
   }
 
   private observe(container: HTMLElement): void {
@@ -429,13 +424,14 @@ export default class SearchHighlightPlus extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = (await this.loadData()) as Partial<TableSearchHighlightSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
   }
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
   }
 
-  // 用户自定义高亮背景色：空值跟随主题变量，非空则注入 style 覆盖。
+  // 用户自定义高亮背景色：空值用默认浅黄，非空则通过 CSS 变量 --shp-highlight-color 覆盖（见 styles.css）。
   // 参考 Highlight Same Matches 的做法，用颜色输入框让用户自选高亮色。
   //
   // 需要覆盖三处（否则「关掉自动切阅读模式」后改色无效）：
@@ -445,29 +441,13 @@ export default class SearchHighlightPlus extends Plugin {
   //     不读 background-color，故必须显式改背景 + 干掉外环。
   //  ③ OFF 模式下原生高亮的阅读模式实现：.markdown-rendered .search-highlight > div
   //     是绝对定位覆盖层，同样靠 box-shadow 画环，需改为背景填充。
+  //
+  // 高亮色由 main.ts 写入 document.documentElement 的 --shp-highlight-color 变量，
+  // 具体覆盖规则写在 styles.css（均用 var(--shp-highlight-color, #FFD84D)），
+  // 不再运行时创建 <style> 元素（Obsidian 禁止插件动态插入 style 标签）。
   applyColorOverride(): void {
-    const id = "search-highlight-plus-color";
-    const el = document.getElementById(id) as HTMLStyleElement | null;
-    // 未自定义时用「默认浅黄」显式覆盖（而不是撤掉样式退回主题/原生强调环）：
-    // 这样 Reset 在任何模式、任何平台上的结果都是「默认浅黄」，所见即所得、跨端一致。
     const color = this.settings.highlightColor?.trim() || DEFAULT_HIGHLIGHT_HEX;
-    if (!el) {
-      const created = document.createElement("style");
-      created.id = id;
-      document.head.appendChild(created);
-    }
-    const target = document.getElementById(id) as HTMLStyleElement | null;
-    if (target) {
-      const fill = color;
-      target.textContent = [
-        // ① 插件自身高亮（开关「开」时）
-        `.search-term-hl { background-color: ${fill} !important; }`,
-        // ② 原生「笔记内查找」——编辑模式（CodeMirror）匹配高亮
-        `.cm-s-obsidian span.obsidian-search-match-highlight { background-color: ${fill} !important; box-shadow: none !important; border-radius: 2px; }`,
-        // ③ 原生「笔记内查找」——阅读模式（绝对定位覆盖层）
-        `.markdown-rendered .search-highlight > div { background-color: ${fill} !important; box-shadow: none !important; opacity: 1 !important; }`,
-      ].join("\n");
-    }
+    document.documentElement.style.setProperty("--shp-highlight-color", color);
   }
 }
 
@@ -475,7 +455,47 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-
+// 「手动输入关键词高亮」命令：用 Obsidian 原生 Modal 收词（不调用 window.prompt，
+// 后者在 Obsidian 的沙箱/移动端环境里行为不稳，且被插件审查规则禁止）。
+class KeywordPromptModal extends Modal {
+  private plugin: SearchHighlightPlus;
+  private onSubmit: (value: string) => void;
+  constructor(plugin: SearchHighlightPlus, onSubmit: (value: string) => void) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.onSubmit = onSubmit;
+  }
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.createEl("h4", { text: "Highlight keywords" });
+    const input = contentEl.createEl("input", { type: "text" });
+    input.value = this.plugin.getQuery();
+    input.placeholder = "space-separated keywords";
+    input.style.marginTop = "8px";
+    input.style.width = "100%";
+    const submit = () => {
+      const v = input.value.trim();
+      this.close();
+      if (v) this.onSubmit(v);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
+    });
+    const btnRow = contentEl.createDiv({ cls: "modal-button-row" });
+    btnRow.style.marginTop = "12px";
+    const ok = btnRow.createEl("button", { text: "Highlight", cls: "mod-cta" });
+    ok.addEventListener("click", submit);
+    const cancel = btnRow.createEl("button", { text: "Cancel" });
+    cancel.addEventListener("click", () => this.close());
+    window.setTimeout(() => input.focus(), 0);
+  }
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
 
 /** 取色输入解析：桌面端 = 系统取色器给的 `#rrggbb`；移动端 = 手输的「R,G,B」。
  *  兼容 `#RRGGBB` / `RRGGBB` / `255,216,77` / `255 216 77`（也认全角逗号）。
@@ -511,7 +531,7 @@ class SettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Search Highlight+ Settings" });
+    new Setting(containerEl).setName("Search Highlight+ Settings").setHeading();
 
     new Setting(containerEl)
       .setName("Auto reading mode on search result click")
@@ -593,7 +613,6 @@ class SettingTab extends PluginSettingTab {
           } catch (err) {
             console.error("[SearchHighlight+] failed to save after reset", err);
           }
-          console.log("[SearchHighlight+] highlight color reset to default");
         });
       })
       .addText((text) => {
@@ -628,7 +647,6 @@ class SettingTab extends PluginSettingTab {
               return;
             }
             commit(hex);
-            console.log(`[SearchHighlight+] highlight color = ${hex} (RGB input)`);
           };
           input.addEventListener("change", onCommit);
           input.addEventListener("blur", onCommit);
@@ -669,7 +687,6 @@ class SettingTab extends PluginSettingTab {
         void this.plugin.saveSettings().catch((err) =>
           console.error("[SearchHighlight+] failed to save preset color", err)
         );
-        console.log(`[SearchHighlight+] highlight color = ${preset.hex} (${preset.name})`);
       });
       swatchEls.push(sw);
     }

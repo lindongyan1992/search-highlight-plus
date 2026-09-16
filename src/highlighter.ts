@@ -58,8 +58,16 @@ export function highlightAll(container: HTMLElement, regexes: RegExp[]): void {
   while ((n = walker.nextNode())) textNodes.push(n as Text);
 
   for (const node of textNodes) {
-    const frag = buildFragment(node.nodeValue ?? "", regexes);
-    if (frag) node.parentNode?.replaceChild(frag, node);
+    const parts = buildParts(node.nodeValue ?? "", regexes);
+    if (!parts) continue;
+    // 用 createEl 生成 mark；文本段用 document.createTextNode 插入，避免额外包裹元素。
+    let ref: Node = node;
+    for (const part of parts) {
+      const el = typeof part === "string" ? document.createTextNode(part) : part;
+      ref.parentNode?.insertBefore(el, ref);
+      ref = el;
+    }
+    node.remove();
   }
 }
 
@@ -67,7 +75,7 @@ export function highlightAll(container: HTMLElement, regexes: RegExp[]): void {
  * 将文本按所有正则依次切分，命中段包裹为 mark。
  * 返回 null 表示无任何命中（无需替换）。
  */
-function buildFragment(text: string, regexes: RegExp[]): DocumentFragment | null {
+function buildParts(text: string, regexes: RegExp[]): Array<string | Node> | null {
   // OR 语义：每个正则独立高亮，对齐 Obsidian 原生搜索（文档内每个词分别高亮）
   let result: Array<string | Node> = [text];
 
@@ -87,10 +95,8 @@ function buildFragment(text: string, regexes: RegExp[]): DocumentFragment | null
         const start = m.index;
         const end = start + m[0].length;
         if (start > last) next.push(part.slice(last, start));
-        const mark = document.createElement("mark");
-        mark.className = MARK_CLASS;
-        mark.textContent = m[0];
-        next.push(mark);
+        // 用 Obsidian 的 createEl 创建 mark（避免 document.createElement，满足插件审查规则）。
+        next.push(createEl("mark", { cls: MARK_CLASS, text: m[0] }));
         last = end;
         if (m[0].length === 0) re.lastIndex++; // 防止零宽匹配死循环
       }
@@ -105,9 +111,5 @@ function buildFragment(text: string, regexes: RegExp[]): DocumentFragment | null
 
   if (result.length === 1 && typeof result[0] === "string") return null;
 
-  const frag = document.createDocumentFragment();
-  for (const p of result) {
-    frag.appendChild(typeof p === "string" ? document.createTextNode(p) : p);
-  }
-  return frag;
+  return result;
 }

@@ -1,6 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
-import builtins from "builtin-modules";
+import { builtinModules } from "node:module";
 import { copyFileSync } from "fs";
 
 const banner = `/*
@@ -23,7 +23,7 @@ esbuild
       "electron",
       "@codemirror/state",
       "@codemirror/view",
-      ...builtins,
+      ...builtinModules,
     ],
     format: "cjs",
     target: "es2018",
