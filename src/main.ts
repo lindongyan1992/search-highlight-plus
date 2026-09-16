@@ -4,7 +4,6 @@ import { QueryOptions } from "./query";
 import {
   clearHighlights,
   highlightAll,
-  MARK_CLASS,
 } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
