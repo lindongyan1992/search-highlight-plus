@@ -1,10 +1,7 @@
 import { Plugin, MarkdownView, PluginSettingTab, Setting, ButtonComponent, Platform, Modal } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import { QueryOptions } from "./query";
-import {
-  clearHighlights,
-  highlightAll,
-} from "./highlighter";
+import { clearHighlights } from "./highlighter";
 import { highlightField, setHighlightQuery } from "./cm-highlighter";
 
 /** 高亮色为不透明纯色。预设色卡本身已都是浅色，正文里直接画满色块即可，无需再叠透明度。 */
@@ -33,20 +30,11 @@ const PRESET_COLORS: { name: string; hex: string }[] = [
  *  - 固定成浅黄后，Reset 的预期结果（回到默认浅黄）在编辑模式、阅读模式、桌面、手机上都一致可预期。 */
 const DEFAULT_HIGHLIGHT_HEX = "#FFD84D";
 
-// 诊断开关：控制是否自动点击原生查找条的「Find all / 查找全部」（v0.1.24 起加入）。
-// 设为 false = 只打开查找条并填词、不点按钮，用于排查「点击搜索结果时笔记跳变」是否由该点击引起。
-// 排查完成后可改回 true。
-const CLICK_FIND_ALL: boolean = false;
-
 const SEARCH_INPUT_SELECTOR =
   ".search-input-container input, input.search-input, .editor-search-input";
 
 interface TableSearchHighlightSettings extends QueryOptions {
-  /** 点击全局搜索结果时，自动把笔记切换到阅读（预览）模式。
-   *  原因：Live Preview 下全局搜索点开文件只做滚动/选中，不产生持久高亮标记；
-   *  阅读视图会持久渲染搜索高亮，插件才能复用其关键词照亮表格。 */
-  autoReadingMode: boolean;
-  /** 高亮背景色。空字符串 = 跟随 Obsidian 主题变量 (--text-highlight-bg)。
+  /** 高亮背景色。空字符串 = 使用内置默认浅黄。
    *  非空 = 用户自定义十六进制颜色，由 applyColorOverride() 通过 CSS 变量注入。 */
   highlightColor: string;
 }
@@ -54,14 +42,12 @@ interface TableSearchHighlightSettings extends QueryOptions {
 const DEFAULT_SETTINGS: TableSearchHighlightSettings = {
   caseSensitive: false,
   regex: false,
-  autoReadingMode: true,
   highlightColor: "",
 };
 
 export default class SearchHighlightPlus extends Plugin {
   settings: TableSearchHighlightSettings = { ...DEFAULT_SETTINGS };
   private query = "";
-  private observer: MutationObserver | null = null;
   private applyTimer: number | null = null;
   private pendingSearch = false;
   private boundInputs = new WeakSet<HTMLInputElement>();
@@ -103,43 +89,28 @@ export default class SearchHighlightPlus extends Plugin {
   onunload(): void {
     document.removeEventListener("click", this.onSearchClick, true);
     document.removeEventListener("input", this.onDocumentInput, true);
-    this.stopObserver();
     this.stopBodyWatcher();
     clearHighlights(document);
   }
 
   // 加载后自动恢复：若全局搜索框里有查询词，直接复用并高亮当前笔记，
-  // 无需用户删词重搜。仅在确有查询词时才进入「待搜索」流程（需要时才自动切阅读模式）。
+  // 无需用户删词重搜。
   private recoverState(): void {
     const q = this.readSearchInput();
     if (q) {
       this.query = q;
-      // 关闭「自动切阅读模式」时用原生查找条实现「笔记内搜索」——不在启动时自动弹查找条，
-      // 只在用户点击搜索结果时才触发（见 applyForPending / runNativeFind）。
-      if (this.settings.autoReadingMode) {
-        this.pendingSearch = true;
-        this.applyForPending();
-        return;
-      }
+      this.pendingSearch = true;
+      this.applyForPending();
+      this.runNativeFind();
+      return;
     }
     this.requestApply();
   }
 
-  // 统一入口：处于「待搜索」状态时按开关分流——
-  //   开：先确保阅读模式，再多次重试插件 DOM 高亮；
-  //   关：不切模式、不用插件高亮，改为驱动 Obsidian 原生「笔记内查找」并点「Find all」。
+  // 统一入口：处于「待搜索」状态时，直接多次重试插件 DOM 高亮（编辑模式走 CM decoration）。
   private applyForPending(): void {
     this.pendingSearch = false;
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) {
-      this.scheduleApply();
-      return;
-    }
-    if (this.settings.autoReadingMode) {
-      this.ensureReadingMode(view).then(() => this.scheduleApply()).catch(() => {});
-    } else {
-      this.runNativeFind();
-    }
+    this.scheduleApply();
   }
 
   // 点击全局搜索结果片段
@@ -151,6 +122,7 @@ export default class SearchHighlightPlus extends Plugin {
     if (q) this.query = q;
     this.pendingSearch = true;
     this.scheduleApply();
+    this.runNativeFind();
   };
 
   // 文件/叶切换：若处于「待搜索」状态，先把当前笔记切到阅读模式，再重绘
@@ -194,22 +166,6 @@ export default class SearchHighlightPlus extends Plugin {
     // fallback：直接查 DOM（兼容桌面侧边搜索 / 编辑器内搜索）
     const inp = document.querySelector<HTMLInputElement>(SEARCH_INPUT_SELECTOR);
     return inp?.value?.trim() ?? "";
-  }
-
-  // 把指定 Markdown 视图切换到阅读（预览）模式
-  private async ensureReadingMode(view: MarkdownView): Promise<void> {
-    if (!this.settings.autoReadingMode) return;
-    try {
-      const state = view.leaf.getViewState();
-      const mode = (state.state as { mode?: string } | undefined)?.mode;
-      if (mode === "preview") return;
-      await view.leaf.setViewState({
-        type: "markdown",
-        state: { ...(state.state ?? {}), mode: "preview" },
-      });
-    } catch (err) {
-      console.warn("[SearchHighlight+] Failed to switch to reading mode", err);
-    }
   }
 
   private bindSearchInputs(): void {
@@ -256,47 +212,75 @@ export default class SearchHighlightPlus extends Plugin {
   }
 
   private apply(): void {
-    this.stopObserver();
+    // 阅读模式：插件【不】注入任何 DOM，完全交给 Obsidian 原生 .search-highlight，
+    // 由 styles.css 覆盖 --text-highlight-bg 改色。
+    // 原因：注入/移除 <mark> 会拆分原生高亮已锚定的文本节点，触发 Obsidian 把高亮范围
+    // 重新锚定到整句/整元素，表现为「跳动到句末」；且原生层改色在注入冲突下会露默认色。
+    // 编辑模式高亮由 CM6 decoration 处理（dispatchHighlight 同步），本插件不再动预览 DOM。
     clearHighlights(document);
-
-    // 关闭「自动切阅读模式」时：插件不注入任何高亮（高亮全部交给原生查找条，避免重复），
-    // 仅清掉可能残留的编辑模式 CM 高亮后返回。
-    if (!this.settings.autoReadingMode) {
-      this.dispatchHighlight("");
-      return;
-    }
-
-    const leaves = this.app.workspace.getLeavesOfType("markdown");
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-
-    // 只使用搜索框里的精确查询词：保证只高亮关键词本身，绝不把整格/整段的原生高亮标记当词。
-    // 复杂块（表格/引用块/callout/代码块/列表项/含 wikilink 的列表项等）内只亮关键词；
-    // 原生整块 flash 由 Obsidian 自身控制，本插件不干预、也不依赖其类名。
-    const q = this.getQuery();
-    const terms = new Set<string>();
-    if (q) {
-      q.split(/\s+/).filter(Boolean).forEach((t) => terms.add(t));
-    }
-
-    // 编辑模式（Live Preview / Source）：交给 CM6 decoration 高亮。
-    // 无论当前是否预览、是否有查询，都同步一次（空查询 = 清除编辑模式高亮）。
     this.dispatchHighlight();
 
-    if (!activeView || terms.size === 0) return;
+    const q = this.getQuery();
+    if (!q) return;
+    // 查询非空时编辑模式已由 dispatchHighlight 同步 CM 高亮；
+    // 阅读模式靠原生 .search-highlight + CSS 变量覆盖，无需额外动作。
+  }
 
-    const regexes = Array.from(terms).map(
-      (t) => new RegExp(escapeRegExp(t), this.settings.caseSensitive ? "g" : "gi")
+  // 「自动在笔记内搜索」：编辑模式与阅读模式都驱动 Obsidian 原生查找条（开 + 填词，不点 Find all）。
+  // 走 Obsidian 自己的 Ctrl+F 高亮（编辑模式 .obsidian-search-match-highlight / 阅读模式 .search-highlight），
+  // Obsidian 自管锚点、不跳动；自定义色由 styles.css 的 --text-highlight-bg 覆盖。
+  // 编辑模式下 CM decoration 已逐关键词高亮，原生查找条额外提供「上一条/下一条」导航，二者同色不冲突。
+  private runNativeFind(attempt = 0): void {
+    const q = this.getQuery();
+    if (!q) return;
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) {
+      if (attempt < 12) window.setTimeout(() => this.runNativeFind(attempt + 1), 100);
+      return;
+    }
+    const ok = this.openNativeFindBar();
+    if (!ok) {
+      if (attempt < 12) window.setTimeout(() => this.runNativeFind(attempt + 1), 100);
+      return;
+    }
+    this.fillFindBar(q, 0);
+  }
+
+  private openNativeFindBar(): boolean {
+    const app = this.app as unknown as {
+      commands?: { executeCommandById(id: string): boolean };
+    };
+    if (app.commands?.executeCommandById) {
+      try {
+        return app.commands.executeCommandById("editor:open-search");
+      } catch (err) {
+        console.warn("[SearchHighlight+] editor:open-search failed", err);
+      }
+    }
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView) as unknown as
+      | { showSearch?: (replace?: boolean) => void }
+      | null;
+    if (view?.showSearch) {
+      view.showSearch(false);
+      return true;
+    }
+    return false;
+  }
+
+  private fillFindBar(q: string, attempt: number): void {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const root: ParentNode = view?.containerEl ?? document;
+    const bar = root.querySelector<HTMLElement>(".document-search-container");
+    const input = bar?.querySelector<HTMLInputElement>(
+      ".document-search-input input, input.document-search-input, .document-search input:not(.document-replace-input)"
     );
-
-    // 阅读模式：容器是静态 HTML，沿用 DOM 注入（编辑模式已由 CM decoration 处理，跳过）。
-    for (const leaf of leaves) {
-      const v = leaf.view;
-      if (!(v instanceof MarkdownView)) continue;
-      if (!this.isPreview(v)) continue;
-      const c = this.getContainer(v);
-      if (!c) continue;
-      highlightAll(c, regexes);
-      if (v === activeView) this.observe(c);
+    if (!bar || !input) {
+      if (attempt < 12) window.setTimeout(() => this.fillFindBar(q, attempt + 1), 80);
+      return;
+    }
+    if (input.value !== q) {
+      input.value = q;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     }
   }
 
@@ -321,101 +305,9 @@ export default class SearchHighlightPlus extends Plugin {
     }
   }
 
-  // 「笔记内搜索」（关闭「自动切阅读模式」时）：驱动 Obsidian 原生查找条——
-  // 打开查找条并填入查询词（不自动点「Find all」、不自动滚动，避免视口跳变）。
-  // 用户可自行在查找条内按回车/点上一条下一条定位；表格内的匹配通常需再点一次搜索结果片段才能定位。
-  private runNativeFind(attempt = 0): void {
-    const q = this.getQuery();
-    this.apply(); // OFF 下 apply 只做清理（清残留的插件高亮），不会注入插件高亮
-    if (!q) return;
-
-    // 打开当前编辑器的原生查找条（编辑模式的查找条带「Find all」按钮；与 Mod+F 同款命令）。
-    const ok = this.openNativeFindBar();
-    if (!ok) {
-      // 视图/编辑器可能尚未就绪，重试。
-      if (attempt < 12) window.setTimeout(() => this.runNativeFind(attempt + 1), 100);
-      return;
-    }
-    this.fillFindBar(q, 0);
-  }
-
-  // 打开原生「笔记内查找」条：优先走命令（editor:open-search = Mod+F）；命令不可用时
-  // 退回调用视图的 showSearch(false)。两者都是 Obsidian 内部接口，故做类型断言。
-  private openNativeFindBar(): boolean {
-    const app = this.app as unknown as {
-      commands?: { executeCommandById(id: string): boolean };
-    };
-    if (app.commands?.executeCommandById) {
-      try {
-        return app.commands.executeCommandById("editor:open-search");
-      } catch (err) {
-        console.warn("[SearchHighlight+] editor:open-search failed", err);
-      }
-    }
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView) as unknown as
-      | { showSearch?: (replace?: boolean) => void }
-      | null;
-    if (view?.showSearch) {
-      view.showSearch(false);
-      return true;
-    }
-    return false;
-  }
-
-  // 等原生查找条渲染后填入查询词（不自动定位/不自动点按，避免视口跳变）。
-  private fillFindBar(q: string, attempt: number): void {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    const root: ParentNode = view?.containerEl ?? document;
-    const bar = root.querySelector<HTMLElement>(".document-search-container");
-    const input = bar?.querySelector<HTMLInputElement>(
-      ".document-search-input input, input.document-search-input, .document-search input:not(.document-replace-input)"
-    );
-    if (!bar || !input) {
-      if (attempt < 12) window.setTimeout(() => this.fillFindBar(q, attempt + 1), 80);
-      return;
-    }
-    if (input.value !== q) {
-      input.value = q;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    // 等查询注册（部分版本输入有防抖）后点「Find all」（诊断期由 CLICK_FIND_ALL 控制）。
-    if (CLICK_FIND_ALL) window.setTimeout(() => this.clickFindAll(), 220);
-  }
-
-  // 点原生查找条里的「Find all / 查找全部」按钮——按图标 lucide-text-select 定位（跨语言稳定）。
-  private clickFindAll(): void {
-    const bars = Array.from(document.querySelectorAll<HTMLElement>(".document-search-container"));
-    for (const bar of bars) {
-      const icon = bar.querySelector("svg.lucide-text-select");
-      const btn = icon?.closest("button") as HTMLElement | null;
-      if (btn) {
-        btn.click();
-        return;
-      }
-    }
-    console.warn("[SearchHighlight+] Find all button not found (is the note in reading mode?)");
-  }
-
-  // 判断 Markdown 视图是否处于阅读（预览）模式。
-  private isPreview(view: MarkdownView): boolean {
-    const mode = (view.leaf.getViewState().state as { mode?: string } | undefined)?.mode;
-    return mode === "preview";
-  }
-
   // 仅返回阅读模式的预览容器；编辑模式由 CM decoration 处理，不走 DOM 注入。
   private getContainer(view: MarkdownView): HTMLElement | null {
     return view.contentEl.querySelector(".markdown-preview-sizer");
-  }
-
-  private observe(container: HTMLElement): void {
-    this.observer = new MutationObserver(() => this.requestApply());
-    this.observer.observe(container, { childList: true, subtree: true });
-  }
-  private stopObserver(): void {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-    }
   }
 
   async loadSettings(): Promise<void> {
@@ -429,12 +321,12 @@ export default class SearchHighlightPlus extends Plugin {
   // 用户自定义高亮背景色：空值用默认浅黄，非空则通过 CSS 变量 --shp-highlight-color 覆盖（见 styles.css）。
   // 参考 Highlight Same Matches 的做法，用颜色输入框让用户自选高亮色。
   //
-  // 需要覆盖三处（否则「关掉自动切阅读模式」后改色无效）：
-  //  ① 插件自身标记 .search-term-hl —— 开关「开」时（预览 DOM / 编辑 CM 装饰）。
-  //  ② OFF 模式下的原生「笔记内查找」高亮：编辑模式（CodeMirror）的
+  // 需要覆盖三处（统一永久生效，不再区分开关）：
+  //  ① 插件自身标记 .search-term-hl —— 预览 DOM 注入 / 编辑模式 CM 装饰。
+  //  ② 原生「笔记内查找」高亮：编辑模式（CodeMirror）的
   //     span.obsidian-search-match-highlight —— 自带样式是 box-shadow 外环（--text-accent），
   //     不读 background-color，故必须显式改背景 + 干掉外环。
-  //  ③ OFF 模式下原生高亮的阅读模式实现：.markdown-rendered .search-highlight > div
+  //  ③ 原生高亮的阅读模式实现：.markdown-rendered .search-highlight > div
   //     是绝对定位覆盖层，同样靠 box-shadow 画环，需改为背景填充。
   //
   // 高亮色由 main.ts 写入 document.documentElement 的 --shp-highlight-color 变量，
@@ -444,6 +336,7 @@ export default class SearchHighlightPlus extends Plugin {
     const color = this.settings.highlightColor?.trim() || DEFAULT_HIGHLIGHT_HEX;
     document.documentElement.style.setProperty("--shp-highlight-color", color);
   }
+
 }
 
 function escapeRegExp(s: string): string {
@@ -526,19 +419,6 @@ class SettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     new Setting(containerEl).setName("Keyword highlighting").setHeading();
-
-    new Setting(containerEl)
-      .setName("Auto reading mode on search result click")
-      .setDesc(
-        "When on, clicking a global search result switches the note to Reading (preview) mode and the plugin highlights the keywords itself. When off, the note stays in its current mode and the plugin opens the native in-note find bar pre-filled with your query. Note: to locate a matched keyword inside a table, you may need to click the global search result snippet twice."
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.autoReadingMode).onChange(async (value) => {
-          this.plugin.settings.autoReadingMode = value;
-          await this.plugin.saveSettings();
-          this.plugin.requestApply();
-        })
-      );
 
     new Setting(containerEl)
       .setName("Case sensitive")

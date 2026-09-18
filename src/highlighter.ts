@@ -5,8 +5,10 @@
 // 会**把整块/整项**包成 .search-highlight，表现为「整个块高亮、查询词没亮」。
 // 本插件统一做法（v0.1.10 起）：
 //   1) 遍历整个容器所有文本节点，对命中的关键词精确包裹 <mark class="search-term-hl">；
-//   2) 见 styles.css：把 Obsidian 原生搜索高亮（.search-highlight 等）全局置透明，
-//      使插件成为唯一高亮来源——普通段落视觉与原生一致（只亮词），复杂块也只亮词、不再整块亮。
+//   2) 见 styles.css：Obsidian 原生搜索高亮（.search-highlight 等）统一改色为 --shp-highlight-color
+//      （即用户自定义色），而非置透明；阅读模式已彻底不再由插件注入任何 DOM，
+//      避免触发 Obsidian 重渲染/锚点错位而「跳动到句末」。高亮完全交给原生
+//      .search-highlight，并由 styles.css 通过覆盖 --text-highlight-bg 统一改色。
 // 公式(.math)与嵌入(.internal-embed)渲染后文本被拆碎/嵌套，精确包裹可能不完整，
 // 但全局透明已避免其整块高亮，且能命中处仍会被精确包裹。
 
@@ -49,6 +51,8 @@ export function highlightAll(container: HTMLElement, regexes: RegExp[]): void {
       if (p.closest("mark." + MARK_CLASS)) return NodeFilter.FILTER_REJECT;
       // 跳过不应高亮的脚本/样式区域
       if (p.closest("script, style, textarea")) return NodeFilter.FILTER_REJECT;
+      // 跳过 Obsidian 原生高亮包裹层：不在其内部插 <mark>，避免破坏原生范围锚点导致「跳动」。
+      if (p.closest(".search-highlight, .obsidian-search-match-highlight")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });

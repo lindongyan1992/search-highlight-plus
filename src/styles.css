@@ -1,18 +1,31 @@
 /* 搜索关键词高亮：统一用 CSS 变量 --shp-highlight-color（默认浅黄），由 main.ts 写入。
    用户自定义色由 main.ts 通过 document.documentElement.style.setProperty 设置该变量。 */
+/* 阅读模式（及全局/编辑模式原生查找）搜索高亮统一改用插件自定义色：
+   直接覆盖 Obsidian 自身的 --text-highlight-bg 变量（带 !important）。
+   这比逐选择器 !important 更稳 —— 对所有匹配态（普通项/当前项）与
+   <mark> / <span class="search-highlight"> 两种实现都生效，且不再依赖具体 class。
+   插件已不再向阅读模式注入 DOM，此处是阅读模式高亮唯一来源。 */
+:root {
+  --text-highlight-bg: var(--shp-highlight-color, #FFD84D) !important;
+  --text-highlight-bg-active: var(--shp-highlight-color, #FFD84D) !important;
+}
+
 .search-term-hl {
   background-color: var(--shp-highlight-color, #FFD84D);
   color: var(--text-normal);
   border-radius: 2px;
 }
 
-/* 原生「笔记内查找」高亮（关闭「自动切阅读模式」时）：编辑模式 / 阅读模式两处。
-   这两处是 Obsidian 自带类，必须用 !important 覆盖其默认 box-shadow 强调环与背景。 */
+/* 原生「笔记内查找」高亮：编辑模式 / 阅读模式两处。
+   这两处是 Obsidian 自带类，必须用 !important 覆盖其默认 box-shadow 强调环与背景。
+   选择器同时覆盖父级 .search-highlight 与其子 div（二者在不同版本/状态下各自承载底色），
+   避免首帧只命中其中之一而露出 Obsidian 默认色（表现为「首点显示默认色、再点才变自定义」）。 */
 .cm-s-obsidian span.obsidian-search-match-highlight {
   background-color: var(--shp-highlight-color, #FFD84D) !important;
   box-shadow: none !important;
   border-radius: 2px;
 }
+.markdown-rendered .search-highlight,
 .markdown-rendered .search-highlight > div {
   background-color: var(--shp-highlight-color, #FFD84D) !important;
   box-shadow: none !important;
