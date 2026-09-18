@@ -25,11 +25,14 @@
   box-shadow: none !important;
   border-radius: 2px;
 }
-.markdown-rendered .search-highlight,
+/* 阅读模式原生查找高亮：
+   父级 .search-highlight 与子级 > div 都改背景色，保留原生 box-shadow 高亮环。
+   紫色方框由子级 box-shadow 实现，background-color 提供自定义底色，二者叠加。 */
+.markdown-rendered .search-highlight {
+  background-color: var(--shp-highlight-color, #FFD84D) !important;
+}
 .markdown-rendered .search-highlight > div {
   background-color: var(--shp-highlight-color, #FFD84D) !important;
-  box-shadow: none !important;
-  opacity: 1 !important;
 }
 
 /* ============================================================================

@@ -122,7 +122,9 @@ export default class SearchHighlightPlus extends Plugin {
     if (q) this.query = q;
     this.pendingSearch = true;
     this.scheduleApply();
-    this.runNativeFind();
+    // 延迟到下一个宏任务，让 Obsidian 原生的「打开文件→滚动→表格渲染」先完成，
+    // 避免插件在表格未渲染完时触发搜索，导致表格内匹配丢失。
+    setTimeout(() => this.runNativeFind(), 0);
   };
 
   // 文件/叶切换：若处于「待搜索」状态，先把当前笔记切到阅读模式，再重绘
@@ -278,10 +280,13 @@ export default class SearchHighlightPlus extends Plugin {
       if (attempt < 12) window.setTimeout(() => this.fillFindBar(q, attempt + 1), 80);
       return;
     }
-    if (input.value !== q) {
+    // 先清空再填入，确保 Obsidian 检测到值变化并重新渲染高亮
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    setTimeout(() => {
       input.value = q;
       input.dispatchEvent(new Event("input", { bubbles: true }));
-    }
+    }, 50);
   }
 
   // 当前生效的查询：优先用输入事件缓存的词，否则实时读搜索框。
